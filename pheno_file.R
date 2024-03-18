@@ -1,13 +1,29 @@
 ####### Phenotypic file 
-# Use age at recruitment and reported sex
-# Focus on CAU only
-# Look at all chronic pain, exclude general pain
-# Control: no pain at all ("none of the above" from 6159)
+
+# Include age at recruitment and reported sex
+# Focus on caucasians (cau) only
+# Traits: chronic pain types, exclude general pain
+# Control: no pain reported, chronic or non-chronic
+# (so valid if only "none of the above" from non-chronic pain question (code 6159) was reported)
 
 # Load bd dataframe
 load("../../data/raw/bd671644_orig_sasha.Robj", verbose = TRUE)
 
-### Phenotypes - codes and columns
+
+### CLARIFYING BD COLUMN NAMES (replacing numerical codes with traits)
+
+# Each bd file column names follows structure: "Field_ID.Instance#.Array#" 
+# Field_ID: UK Biobank code for a specific phenotypic trait
+# Instance: ith (order of thee) occasion where participants had measurements performed 
+# (e.g. Instance 0 is first time participants came in, Instance 3 is the fourth time they were asked to come in)
+# Array: ith (order of the) answer given by participant to a question in one instance 
+# e.g. Array 0 is the first answer given, Array 4 is the fifth answer given to the same question
+# If all participants attended a clinic 3 times and had their height measured twice during each visit, 
+# then the data-field would have 3 instances, each of which being an array of 2 values.
+# As data across instances and arrays will be concatenated in final phenotype df for each participant, only
+# field ID section of bd column names is relevant and need to be clarified
+
+### Traits - Field_ID equivalence from UK Biobank
 # Age at recruitment, 21022
 # Sex, 31
 # Genetic ethnic grouping, 22006
@@ -19,109 +35,104 @@ load("../../data/raw/bd671644_orig_sasha.Robj", verbose = TRUE)
 # Headache for 3+ months, 3799
 # Facial pains for 3+ months, 4067
 # Stomach/abdominal pain for 3+ months, 3741
-# Pain type(s) experienced in the last month, 6159 -> only use "none of the above", rest is NA
+# Pain type(s) experienced in the last month, 6159 (non-chronic pain types):
+#     headache, 1 
+#     facial pain, 2 
+#     neck/shoulder pain, 3
+#     back pain, 4 
+#     stomach/abdominal pain, 5
+#     hip pain, 6 
+#     knee pain, 7 
+#     pain all over the body, 8 
+#     none of the above, -7 
+#     prefer not to say, -3
+# should i put the detail of the 6159 codes in the non-chronic pain section rather?
 
-# OPTION 1: MANUALLY
+# OPTION 1: MANUALLY CHANGING BD COLNAMES
 colnames(bd) <- gsub("f.", "", colnames(bd), fixed = T)
 colnames(bd) <- gsub("31", "sex", colnames(bd), fixed = T)
 colnames(bd) <- gsub("21022", "age", colnames(bd), fixed = T)
-colnames(bd) <- gsub("22006", "ethnicity", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3571", "c_back", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3404", "c_neck", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3414", "c_hip", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3773", "c_knee", colnames(bd), fixed = T)
-colnames(bd) <- gsub("2956", "c_general", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3799", "c_headache", colnames(bd), fixed = T)
-colnames(bd) <- gsub("4067", "c_facial", colnames(bd), fixed = T)
-colnames(bd) <- gsub("3741", "c_abdominal", colnames(bd), fixed = T)
-colnames(bd) <- gsub("6159", "pain", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".0.", ".instance1.", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".1.", ".instance2.", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".2.", ".instance3.", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".3.", ".instance4.", colnames(bd), fixed = T)
-#change array to question?
-colnames(bd) <- gsub(".0", ".array1", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".1", ".array2", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".2", ".array3", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".3", ".array4", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".4", ".array5", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".5", ".array6", colnames(bd), fixed = T)
-colnames(bd) <- gsub(".6", ".array7", colnames(bd), fixed = T)
+colnames(bd) <- gsub("22006", "caucasian", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3571", "back_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3404", "neck_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3414", "hip_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3773", "knee_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("2956", "general_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3799", "headache", colnames(bd), fixed = T)
+colnames(bd) <- gsub("4067", "facial_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("3741", "abdominal_pain", colnames(bd), fixed = T)
+colnames(bd) <- gsub("6159", "non-chronic", colnames(bd), fixed = T)
 
-# OPTION 2: LOOPING - find a way to include the column name change in the loop!
+# OPTION 2: LOOPING TO CHANGE BD COLNAMES- not necessary as we decided not to include instance/arrays anymore
 better_colnames <- c(
   "f." = "",
   "31" = "sex",
   "21022" = "age",
-  "22006" = "ethnicity",
-  "3571" = "c_back",
-  "3404" = "c_neck",
-  "3414" = "c_hip",
-  "3773" = "c_knee",
-  "2956" = "c_general",
-  "3799" = "c_headache",
-  "4067" = "c_facial",
-  "3741" = "c_abdominal",
-  "6159" = "pain"
-)
-for (replacement in names(better_colnames)) {
-  bd <- setNames(bd, gsub(replacement, better_colnames[replacement], names(bd), fixed = TRUE))
+  "22006" = "caucasian",
+  "3571" = "back_pain",
+  "3404" = "neck_pain",
+  "3414" = "hip_pain",
+  "3773" = "knee_pain",
+  "2956" = "general_pain",
+  "3799" = "headache",
+  "4067" = "facial_pain",
+  "3741" = "abdominal_pain",
+  "6159" = "non-chronic")
+
+for (column in names(better_colnames)) {
+  bd <- setNames(bd, gsub(column, better_colnames[column], names(bd), fixed = TRUE))
 }
-chronic_columns <- c("c_back", "c_neck", "c_hip", "c_knee", "c_general", "c_facial", "c_headache", "c_abdominal", "sex", "age", "ethnicity")
-for (col in chronic_columns) {
+
+# or use this vector: 
+# chronic_columns <- c("back_pain", "neck_pain", "hip_pain", "knee_pain", "general_pain", "facial_pain", 
+# "headache", "abdominal_pain", "sex", "age", "caucasian", "non-chronic")? => for col in chronic_columns
+for (col in names(better_colnames)) {
   for (i in 0:3) {
-    col_to_replace <- paste0(col, ".", i, ".0")
-    new_col_name <- paste0(col, ".instance", i + 1, "")
-    names(bd) <- gsub(col_to_replace, new_col_name, names(bd), fixed = TRUE)
+    for (j in 0:6) {
+      col_to_replace <- paste0(better_colnames[col], ".", i, ".", j)
+      new_col_name <- paste0(better_colnames[col], ".instance", i + 1, ".array", j+1)
+      names(bd) <- gsub(col_to_replace, new_col_name, names(bd), fixed = TRUE)
+    }
   }
-}
-pain_columns <- ("pain")
-for (col in pain_columns) {
-  for (i,j in [0:3],[0:6]) {
+}   
     
-    
-# OPTION 3: CREATING A DF?
+# OPTION 3: CREATING A DF? // EXTRACTING TRAITS FROM DATACODE AND MERGING
 codes_id <- data.frame(age = 21022,
                        sex = 31)
 
-#Do non-chronic pain types need to be reported as 0 or NA?
-#Do chronic pains require the corresponding pain in the last month to be reported as well (as per OG script)? 
-#Doing this here
 
-### ID
-fid <- bd[, "eid"] # added spaces arrouund arrows + changed to lowercase
+### PULL BD CONTENT INTO TRAIT-SPECIFIC VECTORS
+
+# ID, age, sex and ethnic grouping were only reported once (so no instance/array to deal witb)
+
+# ID: FID (family ID) and IID (individual ID) are both required for later uses of the phenotype file
+# FID
+fid <- bd[, "eid"]
 # should i add drop = FALSE to ensure that the result is a dataframe?or is it fine as a vecotr
+# IID
 iid <- bd[, "eid"]
 
-### Sex
-sex <- bd[, "sex.instance1"] # changed name to lowercase
+# Sex
+sex <- bd[, grep("sex", names(bd))] # select column sex.0.0
 #w<-which(is.na(Sex) & !is.na(bd.rec[,5])) #not sure what this is for
 #Sex[w]<-bd.rec[w,5]
 
-### Age
-age <- bd[, "age.instance1"]
+# Age
+age <- bd[, grep("age", names(bd))] # select age.0.0
 
-### Genetic ethnicity
-cau <- bd[, "ethnicity.instance1"]
+# Genetic ethnic grouping - Causasian
+cau <- bd[, grep("caucasian", names(bd))] # select caucasian.0.0 
 
-#### PAIN
+### Non-chronic pain
+# Non-chronic pain is necessary to define chronic pain types and control so need to create 
+# individual vectors for each non-chronic pain type (field 6159, answers 1:8, -3, -7, see detail above)
 
-###Control
-# make vectors for non chronic pain types- field 6159
-# new version, include all non-chronic pain types (to be excluded from final phenotype file df) so that they can be used
-# to define the chronic pain types (as the corresponding non-chronic pain must have been reported in the last month 
-# if they have chronic pain) + need all pain types that include "pain all over" or "general chronic pain" to be made NA)
-# (in other words, whoever reported pain allover the body for 3+ months or in 6159 must be NA for any other phenotype), 
-# and need pain types to differentiate "None of the above" (nopain) used as control (where only "none of the above" was 
-# reported in all instances) VS inconsistent data when pain+nopain was reported (to be made NA).
-
-# replacing pain<-bd[,35:62] #6159 with
-pain <- bd [, grep("pain", names(bd))]
-# or pain -< bd[, grep("^pain", names(bd))]
+nc_pain <- bd[, grep("non-chronic", names(bd))]
 # had this written before: pain<-sapply(pain,as.character)
+nc_pain[nc_pain == -7] <- 9 # swap to avoid clash with knee (7)
 
-pain[pain == -7] <- -9 # MF: to avoid clash with knee (7)
-
+# Concatenate all instances and arrays into one element per participant for each non-chronic pain type and store 
+# the rows (participant) in separate vectors for each nc pain type
 getpain <- function(trait) {
   res <- vector()
   for(i in 1:ncol(pain)) {                  #loop to iterate over each column of the pain data frame
@@ -129,61 +140,58 @@ getpain <- function(trait) {
     if(length(w) != 0) res <- append(res, w)}    #checks if w contains any elements (so if trait was found in ith column). If w is not empty, the indices stored in w are appended to the res vector
   return(unique(res))}                      #returns the unique elements in the res vector (=indices of columns where the trait was found)
 
-back <- getpain(4); tmp <- rep(0, nrow(bd)); tmp[back] <- 1; back <- tmp
-neck <- getpain(3); tmp <- rep(0, nrow(bd)); tmp[neck] <- 1; neck <- tmp    
-hip <- getpain(6); tmp <- rep(0, nrow(bd)); tmp[hip] <- 1; hip <- tmp
-knee <- getpain(7); tmp <- rep(0, nrow(bd)); tmp[knee] <- 1; knee <- tmp
-abdo <- getpain(5); tmp <- rep(0, nrow(bd)); tmp[abdo] <- 1; abdo <- tmp
-headache <- getpain(1); tmp <- rep(0, nrow(bd)); tmp[headache] <- 1; headache <- tmp
-facial <- getpain(2); tmp <- rep(0, nrow(bd)); tmp[facial] <- 1; face <- tmp # changed from face to facial
-allover <- getpain(8); tmp <- rep(0, nrow(bd)); tmp[allover] <- 1; allover <- tmp
-nopain <- getpain(-9); tmp <- rep(0, nrow(bd)); tmp[nopain] <- 1; nopain <- tmp  # MF: not required as it is done below
-pain[pain == -3] <- NA #prefer not to say
+# PREVIOUSLY:
+# nc_back <- getpain(4); tmp <- rep(0, nrow(bd)); tmp[nc_back] <- 1; nc_back <- tmp
+# The result of this is "double" data type elements- takes up more memory unnecessarily
+# SO Replacing with this idea:
+# nc_back <- getpain(4)
+# nc_back <- as.integer(1:nrow(bd) %in% nc_back) directly integer, less memory-intensive
 
-## MF: this is much quicker
+# Replace nc_pain codes with explicit word names
+better_names <- c(
+  "1" = "headache",
+  "2" = "facial",
+  "3" = "neck",
+  "4" = "back",
+  "5" = "abdominal",
+  "6" = "hip",
+  "7" = "knee",
+  "8" = "allover",
+  "9" = "nopain")
+for (pain_code in names(better_names)) {
+  pain_indices <- getpain(pain_code) # add as.numeric to pain_code? works without
+  assign(paste0("nc_", better_names[pain_code]), as.integer(1:nrow(bd) %in% pain_indices))
+}
+nc_pain[nc_pain == -3] <- NA # prefer not to say
+
+# ALSO PREVIOUSLY had :
+# nopain <- getpain(9); tmp <- rep(0, nrow(bd)) ;tmp[nopain] <- 1; nopain <- tmp  
+# MF: not required as it is done below? <- don't understand this comment?
+
+# REFINE NON-CHRONIC PAIN TYPES
+
+# Store rows where all elements are NA in nc_pain
 NAs <- which(apply(is.na(pain), 1, all))
 
-# pain type + pain all over = NA
-# MF: added NAs as we need to exclude them here, too
-back[c(which(allover == 1), NAs)] <- NA
-neck[c(which(allover == 1), NAs)] <- NA
-hip[c(which(allover == 1), NAs)] <- NA
-knee[c(which(allover == 1), NAs)] <- NA
-abdo[c(which(allover == 1), NAs)] <- NA
-headache[c(which(allover == 1), NAs)] <- NA
-facial[c(which(allover == 1), NAs)] <- NA
-#nopain[which(allover == 1)] <- NA # unnecessary as done below for all other pain types
+# Exclude participants who reported pain all over and only NA answers in questionnaire
+# Make a loop instead?
+nc_back[c(which(nc_allover == 1), NAs)] <- NA
+nc_neck[c(which(nc_allover == 1), NAs)] <- NA
+nc_hip[c(which(nc_allover == 1), NAs)] <- NA
+nc_knee[c(which(nc_allover == 1), NAs)] <- NA
+nc_abdominal[c(which(nc_allover == 1), NAs)] <- NA
+nc_headache[c(which(nc_allover == 1), NAs)] <- NA
+nc_facial[c(which(nc_allover == 1), NAs)] <- NA
 
-#nopain <- rep(0, nrow(bd))
-nopain[back == 1 | neck == 1 | hip == 1 | knee == 1 | abdo == 1 | headache == 1 | face == 1 | allover == 1] <- NA
-# MF: same as above
-nopain[NAs] <- NA #CONTROL #means unless all non-chronic pain types are 0, nopain should be NA
-# so nopain ("none of the above") is control only if reported in all instances with no other pain type (or NA) reported 
+# More intricate definition of nopain: ONLY answer given by participant must be nopain,
+# not valid if other pain types have been reported too or if all elements of the row were NA 
+nc_nopain[nc_back == 1 | nc_neck == 1 | nc_hip == 1 | nc_knee == 1 | nc_abdominal == 1 | nc_headache == 1 | nc_facial == 1 | nc_allover == 1] <- NA
+nc_nopain[NAs] <- NA 
+# nopain ("none of the above") is CONTROL 
 
-#### CHRONIC
-#back, 3571, cols:15-18
-#neck/shoulder, 3404, cols:7-10
-#hip, 3414, cols:11-14
-#knee, 3773, cols:23-26
-#abdominal/stomach, 3741, cols:19-22
-#headache, 3799, cols: 27-30
-#facial, 4067, cols: 31-34
-#general, 2956, cols:3-6
+### Chronic pain
 
-#### Chronic
-
-# make function to assign 
-#getchron<-function(dset) {
-  #tmp<-sapply(dset,as.character)
-  #tmp<-ifelse(tmp==1,1,ifelse(tmp==0,0,NA))
-#  tmp<-apply(dset,2,as.numeric)             #converts each value of each column to a numeric value and puts resulting matrix in tmp variable 
-#  w <- which(apply(is.na(tmp), 1, all))     #extract indices of rows where all values are NA and store them in w variable
-#  tmp<-rowSums(tmp,na.rm=T)                 # calculate sum of values in each row of tmp and ignore any NA values when doing so
-#  tmp[w]<-NA                                #makes NA rows of tmp corresponding to indices of rows where values are all NA 
-#  tmp[tmp>0]<-1                             #replaces any non-zero values in tmp with 1 
-#  return(tmp)}
-
-# MF: modifed to extract 1s only (cases)
+# Extract 1s only (cases)
 getchron <- function(dset) {
   #tmp<-apply(dset,2,as.numeric)             #converts each value of each column to a numeric value and puts resulting matrix in tmp variable 
   w <- which(apply(is.na(dset), 1, all))
@@ -192,57 +200,61 @@ getchron <- function(dset) {
   tmp[w] <- NA                                #makes NA rows of tmp corresponding to indices of rows where values are all NA 
   tmp[tmp == 0] <- NA
   tmp[tmp > 0] <- 1                             #replaces any non-zero values in tmp with 1 
-  return(tmp)}
-  
+  return(tmp)
+}
 
-c_back <- getchron(bd[, grep("c_back.*", names(bd))])
-c_neck <- getchron(bd[, grep("c_neck.*", names(bd))])
-c_hip <- getchron(bd[, grep("c_hip.*", names(bd))])
-c_knee <- getchron(bd[, grep("c_knee.*", names(bd))])
-c_abdo <- getchron(bd[, grep("c_abdo.*", names(bd))])
-c_headache <- getchron(bd[, grep("c_headache.*", names(bd))])
-c_facial <- getchron(bd[, grep("c_facial.*", names(bd))])
-c_general <- getchron(bd[, grep("c_general.*", names(bd))]) #Need to make rows containing this NA
+# Instead of this: back <- getchron(bd[, grep("back_pain", names(bd))])
+# Loop the getchron() function across pain types
+# OPTION 1
+for (col in names(bd)) {
+  if (grepl("pain", col)) {
+    pain_type <- sub("_pain.*", "", col) # so can grep for each pain_type (all instances/arrays) when applying getchron()
+    assign(pain_type, getchron(bd[, grep(pain_type, names(bd))]))
+  } else if (grepl("headache", col)) {
+    assign("headache", getchron(bd[, grep("headache", names(bd))]))
+  }
+}
 
-# Make sure corresponding pain was experienced in the last month for all chronic pain types reported
-# MF: we don't need them, they are confusing, so we better remove them
-#cBack[which(back==0)]<-NA
-#cNeck[which(neck==0)]<-NA
-#cHip[which(hip==0)]<-NA
-#cKnee[which(knee==0)]<-NA
-#cAbdo[which(abdo==0)]<-NA
-#cHeadache[which(headache==0)]<-NA
-#cFace[which(face==0)]<-NA
-#cGeneral[which(allover==0)]<-NA
+# OPTION 2 (more intermediate variables + checking parameters, add error message?)
+for (col in names(bd)) {
+  if (grepl("pain", col)) {
+    pain_type <- sub("_pain.*", "", col)
+    subset_cols <- grep(pain_type, names(bd))
+    if (length(subset_cols) > 0) {
+      assign(pain_type, getchron(bd[, subset_cols]))
+    }
+  } else if (grepl("headache", col)) {
+    subset_cols <- grep("headache", names(bd))
+    if (length(subset_cols) > 0) {
+      assign("headache", getchron(bd[, subset_cols]))
+    }
+  }
+}
 
-# Chronic pain types + General pain = NA
-# MF: we need to NA all uncertain phenotypes= General + Pain all over from 6159
-c_back[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
-c_neck[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
-c_hip[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
-c_knee[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
-c_abdo[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
-c_headache[c(which(c_general== 1), which(allover == 1), NAs)] <- NA
-c_facial[c(which(c_general == 1), which(allover == 1), NAs)] <- NA
+# Chronic pain type AND General pain (chronic)/Pain all over (non-chronic) = uncertain phenotype, make NA
+back[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+neck[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+hip[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+knee[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+abdominal[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+headache[c(which(general== 1), which(nc_allover == 1), NAs)] <- NA
+facial[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
 
+# Why is this 0 and not NA?
 # MF: Add controls, we don't need to have a separate control phenotype
-c_back[which(nopain == 1)] <- 0
-c_neck[which(nopain == 1)] <- 0
-c_hip[which(nopain == 1)] <- 0
-c_knee[which(nopain == 1)] <- 0
-c_abdo[which(nopain == 1)] <- 0
-c_headache[which(nopain == 1)] <- 0
-c_facial[which(nopain == 1)] <- 0
+back[which(nopain == 1)] <- 0
+neck[which(nopain == 1)] <- 0
+hip[which(nopain == 1)] <- 0
+knee[which(nopain == 1)] <- 0
+abdominal[which(nopain == 1)] <- 0
+headache[which(nopain == 1)] <- 0
+facial[which(nopain == 1)] <- 0
 
-# Need to handle other options (-3, -2, -1) that are displayed in the pheno file! Make them NA?
-# Could do : anything<0 <- NA?
-
-
-###### Pull things together
+# Pull all vectors into phenotype dataframe
 dset<-data.frame(fid, iid, sex, age, cau,
-                 c_back,c_neck,c_hip,c_knee,c_abdo,c_headache,c_facial)
+                 back, neck, hip, knee, abdominal, headache, facial)
 
-dsetC<-dset[dset$CAU%in%"1",]
-write.csv(dsetC, "dsetC4.csv", row.names = FALSE)
-#write.table(dsetC, file = "dsetC4.txt", sep = "\t", row.names = FALSE)
+dsetC<-dset[dset$cau%in%"1",]
+# write.csv(dsetC, "dsetC4.csv", row.names = FALSE)
+# write.table(dsetC, file = "dsetC4.txt", sep = "\t", row.names = FALSE)
 

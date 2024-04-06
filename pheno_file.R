@@ -3,8 +3,8 @@
 # Include age at recruitment and reported sex
 # Focus on caucasians (cau) only
 # Traits: chronic pain types, exclude general pain
-# Control: no pain reported, chronic or non-chronic
-# (so valid if only "none of the above" from non-chronic pain question (code 6159) was reported)
+# Control: no pain reported, chronic or recent
+# (so valid if only "none of the above" from recent pain question (code 6159) was reported)
 
 # Load bd dataframe
 load("../../data/raw/bd671644_orig_sasha.Robj", verbose = TRUE)
@@ -24,7 +24,7 @@ better_colnames <- c(
   "3799" = "headache",
   "4067" = "facial_pain",
   "3741" = "abdominal_pain",
-  "6159" = "non-chronic")
+  "6159" = "recent")
 
 for (column in names(better_colnames)) {
   bd <- setNames(bd, gsub(column, better_colnames[column], names(bd), fixed = TRUE))
@@ -47,21 +47,26 @@ age <- bd[, grep("age", names(bd))] # select age.0.0
 # Genetic ethnic grouping - Causasian
 cau <- bd[, grep("caucasian", names(bd))] # select caucasian.0.0 
 
-### Non-chronic pain
 
-nc_pain <- bd[, grep("non-chronic", names(bd))]
+### Recent pain (experienced in the last month)
 
-# Concatenate all instances and arrays into one element per participant for each non-chronic pain type and store 
-# the rows (participant) in separate vectors for each nc pain type
-getpain <- function(trait) {
-  participant_indices <- vector()
-  for(i in 1:ncol(nc_pain)) {                  
-    new_participants <- grep(trait, nc_pain[, i])                 
-    if(length(new_participants) != 0) participant_indices <- append(participant_indices, new_participants)}   
-  return(unique(participant_indices))}  # avoid duplicates                   
+recentpain_subset <- bd[, grep("recent", names(bd))]
+
+# Concatenate all instances and arrays into one element per participant for each recent pain type and store 
+# the rows (participant) in separate vectors for each recent pain type
+get_participants_per_recentpain_type <- function(trait) {
+  participants <- vector()
+  for(i in 1:ncol(recentpain_subset)) {                  
+    new_participants <- grep(trait, recentpain_subset[, i])                 
+    if(length(new_participants) != 0) {
+      participants <- append(participants, new_participants)
+      }
+    }   
+  return(unique(participant_indices))  # avoid duplicates
+}
 
 # Apply getpain() to following traits based on answer codes to UKB field 6159
-pain_names <- c(
+recentpain_names <- c(
   "1" = "headache",
   "2" = "facial",
   "3" = "neck",
@@ -72,30 +77,33 @@ pain_names <- c(
   "8" = "allover",
   "-7" = "nopain")
 
-nc_pain[nc_pain == "-3"] <- NA # "prefer not to say" is non-applicable, no vector needed
+# Substitute "-3" ("prefer not to say") with NA, does not need to be a vector
+recentpain_subset[recentpain_subset == "-3"] <- NA
 
-for (pain_code in names(pain_names)) {
-  pain_indices <- getpain(pain_code) 
-  assign(paste0("nc_", pain_names[pain_code]), as.integer(1:nrow(bd) %in% pain_indices))
+NAs_in_recentpain <- is.na(recentpain_subset) # logical (TRUE/FALSE) matrix of which element in recentpain_subset are NA
+NA_participants <- which(apply(NAs_in_recentpain, 1, all)) # Rows where all elements are NA in recentpain_subset
+
+get_recentpain_vector <- function(trait) {
+  recentpain_participants <- get_participants_per_recentpain_type(trait)
+  new_vector <- paste0("recent_", recentpain_names[trait])
+  all_participants <- as.integer(1:nrow(bd) %in% recentpain_participants) # participants with recentpain=1, rest of participants in bd=0, whether they are control(nopain) or NA
+  all_participants[NA_participants] <- NA # distinguish which 0 are really 0s and which are actually NAs using NA_participants list of indices
+  assign(new_vector, all_participants)
+  if(recentpain_names[trait] != "recent_allover") {
+    get(new_vector)[which(recent_allover == 1)] <- NA
+  }
 }
 
-# REFINE NON-CHRONIC PAIN TYPE VECTORS
-
-# Rows where all elements are NA in nc_pain
-all_NAs <- which(apply(is.na(nc_pain), 1, all))
-
-# Exclude participants who reported pain all over and only NA answers in questionnaire
-nc_back[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_neck[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_hip[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_knee[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_abdominal[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_headache[c(which(nc_allover == 1), all_NAs)] <- NA
-nc_facial[c(which(nc_allover == 1), all_NAs)] <- NA
+# need to run the function on all_over first
+get_recentpain_vector(names(recentpain_names[recentpain_names == "allover"]))
+# then on rest of the recent pain types
+for (pain_code in names(recentpain_names)) {
+  get_recentpain_vector(pain_code) 
+}
 
 # nopain: not valid if other pain types have been reported too or if all elements of the row were NA 
-nc_nopain[nc_back == 1 | nc_neck == 1 | nc_hip == 1 | nc_knee == 1 | nc_abdominal == 1 | nc_headache == 1 | nc_facial == 1 | nc_allover == 1] <- NA
-nc_nopain[all_NAs] <- NA 
+recent_nopain[recent_back == 1 | recent_neck == 1 | recent_hip == 1 | recent_knee == 1 | recent_abdominal == 1 | recent_headache == 1 | recent_facial == 1] <- NA
+
 
 ### Chronic pain
 
@@ -117,14 +125,14 @@ for (type in (pain_types)) {
   assign(type, as.integer(getchron(bd[, grep(type, names(bd))])))
 }
 
-# Chronic pain type AND General pain (chronic)/Pain all over (non-chronic) = uncertain phenotype, make NA
-back[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
-neck[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
-hip[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
-knee[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
-abdominal[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
-headache[c(which(general== 1), which(nc_allover == 1), NAs)] <- NA
-facial[c(which(general == 1), which(nc_allover == 1), NAs)] <- NA
+# Chronic pain type AND General pain (chronic)/Pain all over (recent) = uncertain phenotype, make NA
+back[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
+neck[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
+hip[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
+knee[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
+abdominal[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
+headache[c(which(general== 1), which(recent_allover == 1), NAs)] <- NA
+facial[c(which(general == 1), which(recent_allover == 1), NAs)] <- NA
 
 # Why is this 0 and not NA?
 # MF: Add controls, we don't need to have a separate control phenotype

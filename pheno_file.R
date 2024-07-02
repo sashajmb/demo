@@ -52,17 +52,16 @@ cau <- bd[, grep("caucasian", names(bd))] # select caucasian.0.0
 
 recentpain_subset <- bd[, grep("recent", names(bd))]
 
-# Concatenate all instances and arrays into one element per participant for each recent pain type and store 
-# the rows (participant) in separate vectors for each recent pain type
-get_participants_per_recentpain_type <- function(trait) {
+# Gather IDs of participants into recent pain type-specific list for each pain type reported, across the 4 instances
+get_participants_per_recentpain_type <- function(trait, data_frame) {
   participants <- vector()
-  for(i in 1:ncol(recentpain_subset)) {                  
-    new_participants <- grep(trait, recentpain_subset[, i])                 
+  for(i in 1:ncol(data_frame)) {                  
+    new_participants <- grep(paste0("^", trait, "$"),data_frame[, i]) # to grep the exact trait, regardelss of sign in front (e.g. -7)                
     if(length(new_participants) != 0) {
       participants <- append(participants, new_participants)
       }
     }   
-  return(unique(participant_indices))  # avoid duplicates
+  return(unique(participants))  # avoid duplicates
 }
 
 # Apply getpain() to following traits based on answer codes to UKB field 6159
@@ -80,25 +79,27 @@ recentpain_names <- c(
 # Substitute "-3" ("prefer not to say") with NA, does not need to be a vector
 recentpain_subset[recentpain_subset == "-3"] <- NA
 
-NAs_in_recentpain <- is.na(recentpain_subset) # logical (TRUE/FALSE) matrix of which element in recentpain_subset are NA
+NAs_in_recentpain <- is.na(recentpain_subset) # logical (TRUE/FALSE) matrix of which elements in recentpain_subset are NA
 NA_participants <- which(apply(NAs_in_recentpain, 1, all)) # Rows where all elements are NA in recentpain_subset
 
-get_recentpain_vector <- function(trait) {
-  recentpain_participants <- get_participants_per_recentpain_type(trait)
-  new_vector <- paste0("recent_", recentpain_names[trait])
-  all_participants <- as.integer(1:nrow(bd) %in% recentpain_participants) # participants with recentpain=1, rest of participants in bd=0, whether they are control(nopain) or NA
+make_recentpain_type_vector <- function(trait) {
+  participants_per_recentpain_type <- get_participants_per_recentpain_type(trait, recentpain_subset)
+  recentpain_type_vector <- paste0("recent_", recentpain_names[trait])
+  all_participants <- as.integer(1:nrow(bd) %in% participants_per_recentpain_type) # participants with recentpain=1, rest of participants in bd=0, whether they are control(nopain) or NA
   all_participants[NA_participants] <- NA # distinguish which 0 are really 0s and which are actually NAs using NA_participants list of indices
-  assign(new_vector, all_participants)
+  assign(recentpain_type_vector, all_participants, envir = .GlobalEnv)
   if(recentpain_names[trait] != "recent_allover") {
-    get(new_vector)[which(recent_allover == 1)] <- NA
+    all_participants[which(recent_allover == 1)] <- NA
+    assign(recentpain_type_vector, all_participants, envir = .GlobalEnv)
   }
 }
 
-# need to run the function on all_over first
-get_recentpain_vector(names(recentpain_names[recentpain_names == "allover"]))
-# then on rest of the recent pain types
+# Need to run the function on all_over first
+make_recentpain_type_vector(which(recentpain_names == "allover"))
+
+# Then onto rest of the recent pain types
 for (pain_code in names(recentpain_names)) {
-  get_recentpain_vector(pain_code) 
+  make_recentpain_type_vector(pain_code) 
 }
 
 # nopain: not valid if other pain types have been reported too or if all elements of the row were NA 
